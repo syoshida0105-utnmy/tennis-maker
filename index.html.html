@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102a43"><title>テニス組み合わせメーカー</title>
+<style>
+:root{--navy:#102a43;--blue:#176b87;--mint:#dff4ed;--bg:#f3f6f8;--ink:#172b3a;--muted:#657786;--line:#dce4e9;--white:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif}
+header{background:var(--navy);color:#fff;padding:23px 17px 19px}header h1{font-size:21px;margin:0 0 5px}header p{margin:0;color:#c8d8e3;font-size:13px}
+main{max-width:700px;margin:auto;padding:14px 13px 40px}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:13px;box-shadow:0 2px 8px #102a4308}
+h2{font-size:16px;margin:0 0 12px}.sub{font-size:12px;color:var(--muted);line-height:1.55}.chips{display:flex;flex-wrap:wrap;gap:8px}
+.person{border:1px solid var(--line);border-radius:999px;padding:9px 13px;background:#fff;color:var(--ink);font-size:14px}
+.person.active{background:var(--mint);border-color:#62b99b;color:#145b47;font-weight:700}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.field{display:flex;gap:8px;margin-top:11px}
+input[type=text]{min-width:0;flex:1;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:16px}
+button{border:0;border-radius:11px;padding:12px 14px;font-size:14px;font-weight:700;background:var(--navy);color:white}
+button.secondary{background:#eaf0f4;color:var(--navy)}button.green{background:#13795b}button.danger{background:#fff0f0;color:#a33}
+button:disabled{opacity:.4}.primary{width:100%;font-size:17px;padding:16px;background:var(--blue)}
+.match{border:1px solid var(--line);border-radius:13px;padding:13px;margin-top:10px}
+.matchhead{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin-bottom:10px}
+.teams{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:7px}
+.team{background:#f1f6f8;border-radius:10px;padding:12px 5px;text-align:center;font-weight:700;font-size:14px;line-height:1.6}
+.vs{font-size:11px;color:var(--muted);font-weight:700}.rest{margin-top:9px;font-size:12px;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#f4f7f9;border-radius:10px;padding:10px;text-align:center}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--muted)}
+.personstats{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:12px}.personstat{background:#f5f8fa;border-radius:9px;padding:8px 10px;font-size:12px;display:flex;justify-content:space-between;gap:5px}
+.notice{background:#fff4d8;padding:11px;border-radius:10px;font-size:12px;line-height:1.55}.historyrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.hidden{display:none!important}footer{text-align:center;color:var(--muted);font-size:11px;padding:8px}
+@media(max-width:390px){.team{font-size:12px}.personstats{grid-template-columns:1fr 1fr}}
+</style></head>
+<body>
+<header><h1>🎾 テニス組み合わせメーカー</h1><p>参加者を選ぶだけ。次の試合を公平にランダム抽選。</p></header>
+<main>
+<section class="card">
+<h2>① 今日の参加者</h2><div id="people" class="chips"></div>
+<div class="field"><input id="newName" type="text" maxlength="12" placeholder="メンバー名を追加"><button id="addPerson" class="secondary">追加</button></div>
+<p class="sub">登録メンバーは次回以降も表示されます。参加する人をタップして選択してください（4〜6人）。</p>
+</section>
+<section class="card">
+<h2>② 今日の試合</h2>
+<div class="stats">
+<div class="stat"><b id="playerCount">0</b><span>参加者</span></div>
+<div class="stat"><b id="roundCount">0</b><span>今日の試合数</span></div>
+<div class="stat"><b id="historyCount">0</b><span>保存済み履歴</span></div>
+</div>
+<p class="sub" style="margin:10px 0">1面・ダブルス。過去6回分の履歴と、今日すでに行った試合を考慮して次の組み合わせを決めます。</p>
+<button id="start" class="primary">🎲 第1試合を抽選する</button>
+<div id="currentArea" class="hidden">
+<div id="currentMatch"></div>
+<div class="row" style="margin-top:12px">
+<button id="next" class="primary" style="flex:1">次の試合を抽選する</button>
+</div>
+<div class="row" style="margin-top:9px">
+<button id="undo" class="secondary">直前の試合を取り消す</button>
+<button id="finish" class="green">今日の履歴を保存して終了</button>
+</div>
+</div>
+</section>
+<section class="card">
+<h2>③ 今日の出場状況</h2><div id="todayStats" class="sub">第1試合を抽選すると、出場・休憩回数が表示されます。</div>
+</section>
+
+<section class="card">
+<h2>⑤ アプリを使わずに行った試合を手動登録</h2>
+<p class="sub">別の方法で決めた試合も記録できます。参加者を選び、実際のペアを指定して登録してください。登録したペア履歴は次回の抽選に反映されます。</p>
+<div id="manualPeople" class="chips"></div>
+<div class="controls" style="margin-top:12px">
+<div class="control"><label for="manualDate">試合日</label><input id="manualDate" type="date" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px"></div>
+<div class="control"><label>登録人数</label><div id="manualCount" style="padding:10px;background:#f4f7f9;border-radius:10px">0人選択</div></div>
+</div>
+<div class="controls" style="margin-top:12px">
+<div class="control"><label for="mA">チームA・1人目</label><select id="mA"></select></div>
+<div class="control"><label for="mB">チームA・2人目</label><select id="mB"></select></div>
+<div class="control"><label for="mC">チームB・1人目</label><select id="mC"></select></div>
+<div class="control"><label for="mD">チームB・2人目</label><select id="mD"></select></div>
+</div>
+<button id="manualSave" class="green" style="width:100%;margin-top:13px">この試合を履歴に登録</button>
+<p class="sub">選択した参加者のうち、ペアに入らなかった人は休憩として記録します。登録した試合は履歴から個別削除できないため、入力内容を確認してから登録してください。</p>
+</section>
+
+<section class="card">
+<h2>⑥ 過去の履歴</h2><div id="historySummary" class="sub"></div><div id="historyList"></div>
+<div class="row" style="margin-top:12px"><button id="export" class="secondary">履歴を書き出す</button><button id="clearHistory" class="danger">履歴を消去</button></div>
+</section>
+<div class="notice"><b>抽選の考え方</b><br>①出場回数・休憩回数の偏りを抑える ②最近組んだペアを避ける ③同じ相手との対戦も分散する、の順に評価。条件のよい候補を複数残し、その中からランダムに選びます。試合数を事前に決める必要はありません。</div>
+<footer>メンバーと履歴はこのiPhoneのブラウザ内に保存されます。機種変更・ブラウザデータ消去の前に履歴を書き出してください。</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
+let people=load("tm_people",["田中","佐藤","鈴木","山田","高橋","伊藤"]);
+let history=load("tm_history",[]),selected=new Set(),session=null;
+const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,"ja")).join("::");
+function saveLocal(){localStorage.setItem("tm_people",JSON.stringify(people));localStorage.setItem("tm_history",JSON.stringify(history))}
+function active(){return [...selected]}
+function renderPeople(){
+ $("people").innerHTML="";
+ people.forEach(n=>{let b=document.createElement("button");b.className="person"+(selected.has(n)?" active":"");b.textContent=(selected.has(n)?"✓ ":"")+n;b.onclick=()=>{if(session){alert("今日の試合中は参加者を変更できません。終了してから変更してください。");return}if(selected.has(n))selected.delete(n);else if(selected.size<6)selected.add(n);renderPeople();updateCounts()};$("people").append(b)});
+}
+function addPerson(){let n=$("newName").value.trim();if(!n)return;if(people.includes(n)){alert("同じ名前が登録されています");return}people.push(n);$("newName").value="";saveLocal();renderPeople();renderManualPeople()}
+function histScores(){
+ let ph={},oh={},flat=[];
+ history.forEach(rec=>(rec.matches||[]).forEach(m=>flat.push({m,date:rec.date})));
+ flat=flat.slice(0,24);
+ flat.forEach(({m},i)=>{let w=Math.max(.2,1-i/24);let a=m.teams[0],b=m.teams[1];[a,b].forEach(t=>{let k=pairKey(t[0],t[1]);ph[k]=(ph[k]||0)+w});a.forEach(x=>b.forEach(y=>{let k=pairKey(x,y);oh[k]=(oh[k]||0)+w}))});
+ return {ph,oh};
+}
+function shuffle(a){let x=a.slice();for(let i=x.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x}
+function statsFor(names,matches){let p=Object.fromEntries(names.map(n=>[n,0])),r=Object.fromEntries(names.map(n=>[n,0]));matches.forEach(m=>{let playing=[...m.teams[0],...m.teams[1]];names.forEach(n=>playing.includes(n)?p[n]++:r[n]++)});return {p,r}}
+function candidateNext(){
+ const names=session.names,done=session.matches,hs=histScores(),st=statsFor(names,done),N=names.length;
+ let candidates=[];
+ // Enumerate every possible rest group and all three doubles splits among the four players.
+ let groups=[];
+ function comb(arr,k,start=0,cur=[]){if(cur.length===k){groups.push(cur.slice());return}for(let i=start;i<arr.length;i++)comb(arr,k,i+1,[...cur,arr[i]])}
+ comb(names,4);
+ groups.forEach(four=>{
+  let rests=names.filter(n=>!four.includes(n));
+  let [a,b,c,d]=four;
+  let splits=[[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]];
+  splits.forEach(teams=>{
+   let score=0;
+   // Prioritize the players with fewer appearances; sitting out someone who has played less costs more.
+   let before=names.map(n=>st.p[n]);
+   let after=names.map(n=>st.p[n]+(rests.includes(n)?0:1));
+   score+=(Math.max(...after)-Math.min(...after))*18;
+   score+=rests.reduce((s,n)=>s+(st.p[n]*2-st.r[n]*1.5),0)*2.4;
+   // Avoid consecutive rests when possible.
+   let prev=done.length?done[done.length-1].rest:[];
+   rests.forEach(n=>{if(prev.includes(n))score+=7});
+   teams.forEach(t=>{
+    let k=pairKey(t[0],t[1]),today=done.reduce((s,m)=>s+((m.teams.some(x=>pairKey(x[0],x[1])===k))?1:0),0);
+    score+=(hs.ph[k]||0)*6+today*13;
+   });
+   let x=teams[0],y=teams[1];
+   x.forEach(p=>y.forEach(q=>{
+    let k=pairKey(p,q),today=done.reduce((s,m)=>{let aa=m.teams[0],bb=m.teams[1];return s+((aa.includes(p)&&bb.includes(q))||(aa.includes(q)&&bb.includes(p))?1:0)},0);
+    score+=(hs.oh[k]||0)*1.3+today*2.2;
+   }));
+   // Mild random jitter avoids deterministic ordering without overwhelming fairness.
+   candidates.push({teams,rest:rests,score});
+  });
+ });
+ candidates.sort((a,b)=>a.score-b.score);
+ let floor=candidates[0].score,near=candidates.filter(c=>c.score<=floor+2.5);
+ return shuffle(near.slice(0,Math.min(12,near.length)))[0];
+}
+function renderMatch(m,index){
+ $("currentMatch").innerHTML=`<div class="match"><div class="matchhead"><b>第${index}試合</b><span>${session.names.length}人参加</span></div><div class="teams"><div class="team">${m.teams[0].join("・")}</div><div class="vs">VS</div><div class="team">${m.teams[1].join("・")}</div></div><div class="rest">休憩：${m.rest.length?m.rest.join("・"):"なし"}</div></div>`;
+}
+function updateStats(){
+ let st=statsFor(session.names,session.matches);
+ $("todayStats").innerHTML="";
+ let box=document.createElement("div");box.className="personstats";
+ session.names.forEach(n=>{let d=document.createElement("div");d.className="personstat";d.innerHTML=`<b>${n}</b><span>${st.p[n]}試合出場 ・ ${st.r[n]}回休憩</span>`;box.append(d)});
+ $("todayStats").append(box);
+ $("roundCount").textContent=session.matches.length;
+}
+function updateCounts(){$("playerCount").textContent=selected.size;$("historyCount").textContent=history.length}
+function startSession(){
+ if(selected.size<4||selected.size>6){alert("参加者を4〜6人選択してください");return}
+ session={names:active(),matches:[]};$("currentArea").classList.remove("hidden");$("start").classList.add("hidden");nextMatch();
+}
+function nextMatch(){if(!session)return;let m=candidateNext();session.matches.push(m);renderMatch(m,session.matches.length);updateStats();$("undo").disabled=session.matches.length===0}
+function undo(){if(!session||!session.matches.length)return;session.matches.pop();if(!session.matches.length){$("currentMatch").innerHTML="";$("todayStats").textContent="まだ試合はありません。";$("roundCount").textContent="0";return}renderMatch(session.matches[session.matches.length-1],session.matches.length);updateStats()}
+function finish(){
+ if(!session||!session.matches.length){alert("保存する試合がありません");return}
+ history.unshift({date:new Date().toISOString(),names:session.names,matches:session.matches.map(m=>({teams:m.teams,rest:m.rest}))});history=history.slice(0,150);saveLocal();session=null;
+ $("currentArea").classList.add("hidden");$("start").classList.remove("hidden");$("start").textContent="🎲 新しいテニスを始める";selected.clear();renderPeople();renderManualPeople();renderHistory();updateCounts();$("todayStats").textContent="今日の試合を保存しました。次回の抽選に反映されます。";$("roundCount").textContent="0";
+}
+function renderHistory(){$("historySummary").textContent=`保存済み：${history.length}回分（新しい順）`;$("historyList").innerHTML="";history.slice(0,10).forEach(r=>{let d=document.createElement("div");d.className="historyrow";d.innerHTML=`<span>${new Date(r.date).toLocaleDateString("ja-JP")} ・ ${(r.names||[]).length}人${r.manual?" ・ 手動":""}</span><b>${(r.matches||[]).length}試合</b>`;$("historyList").append(d)});if(!history.length)$("historyList").innerHTML='<p class="sub">まだ履歴はありません。今日の試合終了時に保存できます。</p>'}
+
+let manualSelected=new Set();
+function renderManualPeople(){
+ $("manualPeople").innerHTML="";
+ people.forEach(n=>{let b=document.createElement("button");b.className="person"+(manualSelected.has(n)?" active":"");b.textContent=(manualSelected.has(n)?"✓ ":"")+n;b.onclick=()=>{if(manualSelected.has(n))manualSelected.delete(n);else if(manualSelected.size<6)manualSelected.add(n);renderManualPeople();renderManualOptions()};$("manualPeople").append(b)});
+ renderManualOptions();
+}
+function renderManualOptions(){
+ const names=[...manualSelected];
+ $("manualCount").textContent=names.length+"人選択";
+ ["mA","mB","mC","mD"].forEach(id=>{
+  const sel=$(id),prev=sel.value;sel.innerHTML='<option value="">選択してください</option>';
+  names.forEach(n=>{let o=document.createElement("option");o.value=n;o.textContent=n;sel.append(o)});
+  if(names.includes(prev))sel.value=prev;
+ });
+}
+function saveManualMatch(){
+ const names=[...manualSelected],a=$("mA").value,b=$("mB").value,c=$("mC").value,d=$("mD").value;
+ if(names.length<4||names.length>6){alert("参加者を4〜6人選択してください");return}
+ const chosen=[a,b,c,d];
+ if(chosen.some(x=>!x)||new Set(chosen).size!==4){alert("4人それぞれ異なるメンバーをチームに指定してください");return}
+ if(chosen.some(x=>!names.includes(x))){alert("チームの選手は参加者から選んでください");return}
+ const date=$("manualDate").value;
+ if(!date){alert("試合日を指定してください");return}
+ const rest=names.filter(n=>!chosen.includes(n));
+ history.unshift({date:new Date(date+"T12:00:00").toISOString(),names,matches:[{teams:[[a,b],[c,d]],rest}],manual:true});
+ history=history.slice(0,150);saveLocal();renderHistory();updateCounts();
+ alert("手動で試合を履歴に登録しました。次回の抽選に反映されます。");
+}
+$("manualDate").value=new Date().toLocaleDateString("en-CA");
+$("manualSave").onclick=saveManualMatch;
+
+$("addPerson").onclick=addPerson;$("newName").addEventListener("keydown",e=>{if(e.key==="Enter")addPerson()});
+$("start").onclick=startSession;$("next").onclick=nextMatch;$("undo").onclick=undo;$("finish").onclick=finish;
+$("clearHistory").onclick=()=>{if(confirm("過去の履歴をすべて消去しますか？")){history=[];saveLocal();renderHistory();updateCounts()}};
+$("export").onclick=()=>{let blob=new Blob([JSON.stringify({people,history},null,2)],{type:"application/json"});let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tennis-history.json";a.click();URL.revokeObjectURL(a.href)};
+renderPeople();renderHistory();updateCounts();
+</script></body></html>
