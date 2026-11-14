@@ -10,7 +10,7 @@ header{background:var(--navy);color:#fff;padding:23px 17px 19px}header h1{font-s
 main{max-width:700px;margin:auto;padding:14px 13px 40px}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:13px;box-shadow:0 2px 8px #102a4308}
 h2{font-size:16px;margin:0 0 12px}.sub{font-size:12px;color:var(--muted);line-height:1.55}.chips{display:flex;flex-wrap:wrap;gap:8px}
 .person{border:1px solid var(--line);border-radius:999px;padding:9px 13px;background:#fff;color:var(--ink);font-size:14px}
-.person.active{background:var(--mint);border-color:#62b99b;color:#145b47;font-weight:700}
+.person.active{background:var(--mint);border-color:#62b99b;color:#145b47;font-weight:700}.member{display:flex;align-items:center;gap:5px}.tiny{padding:7px 9px;font-size:12px}.member-actions{display:flex;gap:4px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.field{display:flex;gap:8px;margin-top:11px}
 input[type=text]{min-width:0;flex:1;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:16px}
 button{border:0;border-radius:11px;padding:12px 14px;font-size:14px;font-weight:700;background:var(--navy);color:white}
@@ -33,7 +33,7 @@ button:disabled{opacity:.4}.primary{width:100%;font-size:17px;padding:16px;backg
 <section class="card">
 <h2>① 今日の参加者</h2><div id="people" class="chips"></div>
 <div class="field"><input id="newName" type="text" maxlength="12" placeholder="メンバー名を追加"><button id="addPerson" class="secondary">追加</button></div>
-<p class="sub">登録メンバーは次回以降も表示されます。参加する人をタップして選択してください（4〜6人）。</p>
+<p class="sub">登録メンバーは次回以降も表示されます。参加する人をタップして選択してください（4〜6人）。抽選開始後も、遅れて来た人の追加や途中退出の変更ができます。変更は次の試合から反映されます。</p>
 </section>
 <section class="card">
 <h2>② 今日の試合</h2>
@@ -44,8 +44,9 @@ button:disabled{opacity:.4}.primary{width:100%;font-size:17px;padding:16px;backg
 </div>
 <p class="sub" style="margin:10px 0">1面・ダブルス。過去6回分の履歴と、今日すでに行った試合を考慮して次の組み合わせを決めます。</p>
 <button id="start" class="primary">🎲 第1試合を抽選する</button>
+<div class="row" style="margin-top:9px"><button id="resetToday" class="danger">当日をリセット</button></div>
 <div id="currentArea" class="hidden">
-<div id="currentMatch"></div>
+<div id="todayMatches"></div>
 <div class="row" style="margin-top:12px">
 <button id="next" class="primary" style="flex:1">次の試合を抽選する</button>
 </div>
@@ -78,7 +79,7 @@ button:disabled{opacity:.4}.primary{width:100%;font-size:17px;padding:16px;backg
 </section>
 
 <section class="card">
-<h2>⑥ 過去の履歴</h2><div id="historySummary" class="sub"></div><div id="historyList"></div>
+<h2>⑥ 過去の履歴</h2><div id="historySummary" class="sub"></div><div class="row" style="margin:10px 0"><input id="deleteDate" type="date" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px"><button id="deleteDateBtn" class="danger">この日を削除</button></div><div id="historyList"></div>
 <div class="row" style="margin-top:12px"><button id="export" class="secondary">履歴を書き出す</button><button id="clearHistory" class="danger">履歴を消去</button></div>
 </section>
 <div class="notice"><b>抽選の考え方</b><br>①出場回数・休憩回数の偏りを抑える ②最近組んだペアを避ける ③同じ相手との対戦も分散する、の順に評価。条件のよい候補を複数残し、その中からランダムに選びます。試合数を事前に決める必要はありません。</div>
@@ -90,13 +91,30 @@ function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){re
 let people=load("tm_people",["田中","佐藤","鈴木","山田","高橋","伊藤"]);
 let history=load("tm_history",[]),selected=new Set(),session=null;
 const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,"ja")).join("::");
-function saveLocal(){localStorage.setItem("tm_people",JSON.stringify(people));localStorage.setItem("tm_history",JSON.stringify(history))}
+function saveLocal(){
+ try{localStorage.setItem("tm_people",JSON.stringify(people));localStorage.setItem("tm_history",JSON.stringify(history));return true}
+ catch(e){alert("この開き方ではデータを保存できない可能性があります。ファイルアプリのプレビューではなく、Safariで開いてください。");return false}
+}
 function active(){return [...selected]}
 function renderPeople(){
  $("people").innerHTML="";
- people.forEach(n=>{let b=document.createElement("button");b.className="person"+(selected.has(n)?" active":"");b.textContent=(selected.has(n)?"✓ ":"")+n;b.onclick=()=>{if(session){alert("今日の試合中は参加者を変更できません。終了してから変更してください。");return}if(selected.has(n))selected.delete(n);else if(selected.size<6)selected.add(n);renderPeople();updateCounts()};$("people").append(b)});
+ people.forEach(n=>{let wrap=document.createElement("div");wrap.className="member";let b=document.createElement("button");b.className="person"+(selected.has(n)?" active":"");b.textContent=(selected.has(n)?"✓ ":"")+n;b.onclick=()=>{if(selected.has(n)){selected.delete(n)}else{if(selected.size>=6){alert("参加者は6人までです");return}selected.add(n)}if(session){session.names=[...selected];session.allNames=[...new Set([...session.allNames,...selected])];}renderPeople();updateCounts();if(session)updateStats()};let edit=document.createElement("button");edit.className="secondary tiny";edit.textContent="編集";edit.onclick=()=>renamePerson(n);let del=document.createElement("button");del.className="danger tiny";del.textContent="削除";del.onclick=()=>deletePerson(n);wrap.append(b,edit,del);$("people").append(wrap)});
 }
-function addPerson(){let n=$("newName").value.trim();if(!n)return;if(people.includes(n)){alert("同じ名前が登録されています");return}people.push(n);$("newName").value="";saveLocal();renderPeople();renderManualPeople()}
+function renamePerson(oldName){let next=prompt("新しいメンバー名を入力してください",oldName);if(next===null)return;next=next.trim();if(!next){alert("名前を入力してください");return}if(next!==oldName&&people.includes(next)){alert("同じ名前が登録されています");return}
+ people=people.map(n=>n===oldName?next:n);if(selected.has(oldName)){selected.delete(oldName);selected.add(next)}if(manualSelected.has(oldName)){manualSelected.delete(oldName);manualSelected.add(next)}
+ history.forEach(rec=>{rec.names=(rec.names||[]).map(n=>n===oldName?next:n);(rec.matches||[]).forEach(m=>{m.teams=m.teams.map(t=>t.map(n=>n===oldName?next:n));m.rest=(m.rest||[]).map(n=>n===oldName?next:n);if(m.attendees)m.attendees=m.attendees.map(n=>n===oldName?next:n)})});
+ if(session){session.names=session.names.map(n=>n===oldName?next:n);session.allNames=session.allNames.map(n=>n===oldName?next:n);session.matches.forEach(m=>{m.teams=m.teams.map(t=>t.map(n=>n===oldName?next:n));m.rest=m.rest.map(n=>n===oldName?next:n);if(m.attendees)m.attendees=m.attendees.map(n=>n===oldName?next:n)})}
+ saveLocal();renderPeople();renderManualPeople();renderHistory();if(session){renderTodayMatches();updateStats()}alert("名前と過去の履歴を更新しました。");
+}
+function deletePerson(name){if(!confirm(name+" を登録メンバーから削除しますか？\n過去の試合履歴は残します。"))return;people=people.filter(n=>n!==name);selected.delete(name);if(session)session.names=session.names.filter(n=>n!==name);manualSelected.delete(name);saveLocal();renderPeople();renderManualPeople();updateCounts();if(session)updateStats()}
+function addPerson(){
+ let n=$("newName").value.trim();
+ if(!n){alert("追加するメンバー名を入力してください");$("newName").focus();return}
+ if(people.includes(n)){alert("同じ名前が登録されています");return}
+ people.push(n);$("newName").value="";
+ saveLocal();renderPeople();renderManualPeople();updateCounts();
+ alert(n+" をメンバーに追加しました。");
+}
 function histScores(){
  let ph={},oh={},flat=[];
  history.forEach(rec=>(rec.matches||[]).forEach(m=>flat.push({m,date:rec.date})));
@@ -105,7 +123,7 @@ function histScores(){
  return {ph,oh};
 }
 function shuffle(a){let x=a.slice();for(let i=x.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x}
-function statsFor(names,matches){let p=Object.fromEntries(names.map(n=>[n,0])),r=Object.fromEntries(names.map(n=>[n,0]));matches.forEach(m=>{let playing=[...m.teams[0],...m.teams[1]];names.forEach(n=>playing.includes(n)?p[n]++:r[n]++)});return {p,r}}
+function statsFor(names,matches){let p=Object.fromEntries(names.map(n=>[n,0])),r=Object.fromEntries(names.map(n=>[n,0]));matches.forEach(m=>{let attendees=m.attendees||names,playing=[...m.teams[0],...m.teams[1]];names.forEach(n=>{if(attendees.includes(n)){if(playing.includes(n))p[n]++;else r[n]++}})});return {p,r}}
 function candidateNext(){
  const names=session.names,done=session.matches,hs=histScores(),st=statsFor(names,done),N=names.length;
  let candidates=[];
@@ -144,30 +162,38 @@ function candidateNext(){
  let floor=candidates[0].score,near=candidates.filter(c=>c.score<=floor+2.5);
  return shuffle(near.slice(0,Math.min(12,near.length)))[0];
 }
-function renderMatch(m,index){
- $("currentMatch").innerHTML=`<div class="match"><div class="matchhead"><b>第${index}試合</b><span>${session.names.length}人参加</span></div><div class="teams"><div class="team">${m.teams[0].join("・")}</div><div class="vs">VS</div><div class="team">${m.teams[1].join("・")}</div></div><div class="rest">休憩：${m.rest.length?m.rest.join("・"):"なし"}</div></div>`;
+function renderTodayMatches(){
+ $("todayMatches").innerHTML="";
+ if(!session.matches.length){$("todayMatches").innerHTML='<p class="sub">まだ試合はありません。</p>';return}
+ session.matches.forEach((m,i)=>{let el=document.createElement("div");el.className="match";el.innerHTML=`<div class="matchhead"><b>第${i+1}試合</b><span>${(m.attendees||session.allNames).length}人参加</span></div><div class="teams"><div class="team">${m.teams[0].join("・")}</div><div class="vs">VS</div><div class="team">${m.teams[1].join("・")}</div></div><div class="rest">休憩：${m.rest.length?m.rest.join("・"):"なし"}</div>`;$("todayMatches").append(el)});
 }
 function updateStats(){
- let st=statsFor(session.names,session.matches);
- $("todayStats").innerHTML="";
- let box=document.createElement("div");box.className="personstats";
- session.names.forEach(n=>{let d=document.createElement("div");d.className="personstat";d.innerHTML=`<b>${n}</b><span>${st.p[n]}試合出場 ・ ${st.r[n]}回休憩</span>`;box.append(d)});
- $("todayStats").append(box);
+ let st=statsFor(session.allNames,session.matches);
+ $("todayStats").innerHTML="";let box=document.createElement("div");box.className="personstats";
+ session.allNames.forEach(n=>{let d=document.createElement("div");d.className="personstat";d.innerHTML=`<b>${n}</b><span>${st.p[n]}試合出場 ・ ${st.r[n]}回休憩</span>`;box.append(d)});$("todayStats").append(box);
  $("roundCount").textContent=session.matches.length;
 }
 function updateCounts(){$("playerCount").textContent=selected.size;$("historyCount").textContent=history.length}
 function startSession(){
  if(selected.size<4||selected.size>6){alert("参加者を4〜6人選択してください");return}
- session={names:active(),matches:[]};$("currentArea").classList.remove("hidden");$("start").classList.add("hidden");nextMatch();
+ session={names:active(),allNames:active(),matches:[]};$("currentArea").classList.remove("hidden");$("start").classList.add("hidden");renderTodayMatches();$("next").textContent="🎲 次の試合を抽選する";nextMatch();
 }
-function nextMatch(){if(!session)return;let m=candidateNext();session.matches.push(m);renderMatch(m,session.matches.length);updateStats();$("undo").disabled=session.matches.length===0}
-function undo(){if(!session||!session.matches.length)return;session.matches.pop();if(!session.matches.length){$("currentMatch").innerHTML="";$("todayStats").textContent="まだ試合はありません。";$("roundCount").textContent="0";return}renderMatch(session.matches[session.matches.length-1],session.matches.length);updateStats()}
+function nextMatch(){if(!session)return;if(session.names.length<4){alert("次の試合には4人以上の参加者が必要です。参加者を追加してください。");return}let m=candidateNext();m.attendees=session.names.slice();session.allNames=[...new Set([...session.allNames,...session.names])];session.matches.push(m);renderTodayMatches();updateStats();$("undo").disabled=false}
+function undo(){if(!session||!session.matches.length)return;session.matches.pop();renderTodayMatches();updateStats();$("roundCount").textContent=session.matches.length}
+function resetToday(){if(!confirm("今日の参加者選択と試合記録をリセットしますか？\n保存済みの過去履歴は残ります。"))return;session=null;selected.clear();$("currentArea").classList.add("hidden");$("start").classList.remove("hidden");$("start").textContent="🎲 第1試合を抽選する";$("todayMatches").innerHTML="";$("todayStats").textContent="第1試合を抽選すると、出場・休憩回数が表示されます。";$("roundCount").textContent="0";renderPeople();updateCounts()}
 function finish(){
  if(!session||!session.matches.length){alert("保存する試合がありません");return}
- history.unshift({date:new Date().toISOString(),names:session.names,matches:session.matches.map(m=>({teams:m.teams,rest:m.rest}))});history=history.slice(0,150);saveLocal();session=null;
+ history.unshift({date:new Date().toISOString(),names:session.allNames,matches:session.matches.map(m=>({teams:m.teams,rest:m.rest,attendees:m.attendees||session.allNames}))});history=history.slice(0,150);saveLocal();session=null;
  $("currentArea").classList.add("hidden");$("start").classList.remove("hidden");$("start").textContent="🎲 新しいテニスを始める";selected.clear();renderPeople();renderManualPeople();renderHistory();updateCounts();$("todayStats").textContent="今日の試合を保存しました。次回の抽選に反映されます。";$("roundCount").textContent="0";
 }
-function renderHistory(){$("historySummary").textContent=`保存済み：${history.length}回分（新しい順）`;$("historyList").innerHTML="";history.slice(0,10).forEach(r=>{let d=document.createElement("div");d.className="historyrow";d.innerHTML=`<span>${new Date(r.date).toLocaleDateString("ja-JP")} ・ ${(r.names||[]).length}人${r.manual?" ・ 手動":""}</span><b>${(r.matches||[]).length}試合</b>`;$("historyList").append(d)});if(!history.length)$("historyList").innerHTML='<p class="sub">まだ履歴はありません。今日の試合終了時に保存できます。</p>'}
+function dateKey(rec){return new Date(rec.date).toLocaleDateString("en-CA")}
+function renderHistory(){
+ $("historySummary").textContent=`保存済み：${history.length}回分（新しい順）`;$("historyList").innerHTML="";
+ history.slice(0,30).forEach((r,idx)=>{let d=document.createElement("div");d.className="historyrow";let left=document.createElement("span");left.textContent=`${new Date(r.date).toLocaleDateString("ja-JP")} ・ ${(r.names||[]).length}人${r.manual?" ・ 手動":""} ・ ${(r.matches||[]).length}試合`;let del=document.createElement("button");del.className="danger tiny";del.textContent="この記録を削除";del.onclick=()=>{if(confirm("この記録を削除しますか？")){history.splice(idx,1);saveLocal();renderHistory();updateCounts()}};d.append(left,del);$("historyList").append(d)});
+ if(!history.length)$("historyList").innerHTML='<p class="sub">まだ履歴はありません。今日の試合終了時に保存できます。</p>';
+}
+function deleteHistoryDate(){let date=$("deleteDate").value;if(!date){alert("削除する日付を選んでください");return}let before=history.length;history=history.filter(r=>dateKey(r)!==date);if(history.length===before){alert("その日の履歴はありません");return}if(confirm(date+" の履歴をすべて削除しますか？")){saveLocal();renderHistory();updateCounts()}else{history=load("tm_history",[])} }
+
 
 let manualSelected=new Set();
 function renderManualPeople(){
@@ -193,7 +219,7 @@ function saveManualMatch(){
  const date=$("manualDate").value;
  if(!date){alert("試合日を指定してください");return}
  const rest=names.filter(n=>!chosen.includes(n));
- history.unshift({date:new Date(date+"T12:00:00").toISOString(),names,matches:[{teams:[[a,b],[c,d]],rest}],manual:true});
+ history.unshift({date:new Date(date+"T12:00:00").toISOString(),names,matches:[{teams:[[a,b],[c,d]],rest,attendees:names}],manual:true});
  history=history.slice(0,150);saveLocal();renderHistory();updateCounts();
  alert("手動で試合を履歴に登録しました。次回の抽選に反映されます。");
 }
@@ -201,8 +227,8 @@ $("manualDate").value=new Date().toLocaleDateString("en-CA");
 $("manualSave").onclick=saveManualMatch;
 
 $("addPerson").onclick=addPerson;$("newName").addEventListener("keydown",e=>{if(e.key==="Enter")addPerson()});
-$("start").onclick=startSession;$("next").onclick=nextMatch;$("undo").onclick=undo;$("finish").onclick=finish;
+$("start").onclick=startSession;$("resetToday").onclick=resetToday;$("deleteDateBtn").onclick=deleteHistoryDate;$("next").onclick=nextMatch;$("undo").onclick=undo;$("finish").onclick=finish;
 $("clearHistory").onclick=()=>{if(confirm("過去の履歴をすべて消去しますか？")){history=[];saveLocal();renderHistory();updateCounts()}};
 $("export").onclick=()=>{let blob=new Blob([JSON.stringify({people,history},null,2)],{type:"application/json"});let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tennis-history.json";a.click();URL.revokeObjectURL(a.href)};
-renderPeople();renderHistory();updateCounts();
+renderPeople();renderManualPeople();renderHistory();updateCounts();
 </script></body></html>
