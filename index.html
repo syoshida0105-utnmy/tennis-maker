@@ -28,7 +28,7 @@ button:disabled{opacity:.4}.primary{width:100%;font-size:17px;padding:16px;backg
 @media(max-width:390px){.team{font-size:12px}.personstats{grid-template-columns:1fr 1fr}}
 </style></head>
 <body>
-<header><h1>🎾 テニス組み合わせメーカー</h1><p>参加者を選ぶだけ。次の試合を公平にランダム抽選。</p></header>
+<header><h1>🎾 テニス組み合わせメーカー</h1><p>参加者を選ぶだけ。次の試合を公平にランダム抽選。 Ver.5</p></header>
 <main>
 <section class="card">
 <h2>① 今日の参加者</h2><div id="people" class="chips"></div>
@@ -83,22 +83,22 @@ button:disabled{opacity:.4}.primary{width:100%;font-size:17px;padding:16px;backg
 <div class="row" style="margin-top:12px"><button id="export" class="secondary">履歴を書き出す</button><button id="clearHistory" class="danger">履歴を消去</button></div>
 </section>
 <div class="notice"><b>抽選の考え方</b><br>①出場回数・休憩回数の偏りを抑える ②最近組んだペアを避ける ③同じ相手との対戦も分散する、の順に評価。条件のよい候補を複数残し、その中からランダムに選びます。試合数を事前に決める必要はありません。</div>
-<footer>メンバーと履歴はこのiPhoneのブラウザ内に保存されます。機種変更・ブラウザデータ消去の前に履歴を書き出してください。</footer>
+<footer>メンバー・履歴・進行中の当日試合はこのiPhoneのブラウザ内に保存されます。機種変更・ブラウザデータ消去の前に履歴を書き出してください。</footer>
 </main>
 <script>
 const $=id=>document.getElementById(id);
 function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
 let people=load("tm_people",["田中","佐藤","鈴木","山田","高橋","伊藤"]);
-let history=load("tm_history",[]),selected=new Set(),session=null;
+let history=load("tm_history",[]),session=load("tm_session",null),selected=new Set(load("tm_selected",session?.names||[]));
 const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,"ja")).join("::");
 function saveLocal(){
- try{localStorage.setItem("tm_people",JSON.stringify(people));localStorage.setItem("tm_history",JSON.stringify(history));return true}
+ try{localStorage.setItem("tm_people",JSON.stringify(people));localStorage.setItem("tm_history",JSON.stringify(history));localStorage.setItem("tm_session",JSON.stringify(session));localStorage.setItem("tm_selected",JSON.stringify([...selected]));return true}
  catch(e){alert("この開き方ではデータを保存できない可能性があります。ファイルアプリのプレビューではなく、Safariで開いてください。");return false}
 }
 function active(){return [...selected]}
 function renderPeople(){
  $("people").innerHTML="";
- people.forEach(n=>{let wrap=document.createElement("div");wrap.className="member";let b=document.createElement("button");b.className="person"+(selected.has(n)?" active":"");b.textContent=(selected.has(n)?"✓ ":"")+n;b.onclick=()=>{if(selected.has(n)){selected.delete(n)}else{if(selected.size>=6){alert("参加者は6人までです");return}selected.add(n)}if(session){session.names=[...selected];session.allNames=[...new Set([...session.allNames,...selected])];}renderPeople();updateCounts();if(session)updateStats()};let edit=document.createElement("button");edit.className="secondary tiny";edit.textContent="編集";edit.onclick=()=>renamePerson(n);let del=document.createElement("button");del.className="danger tiny";del.textContent="削除";del.onclick=()=>deletePerson(n);wrap.append(b,edit,del);$("people").append(wrap)});
+ people.forEach(n=>{let wrap=document.createElement("div");wrap.className="member";let b=document.createElement("button");b.className="person"+(selected.has(n)?" active":"");b.textContent=(selected.has(n)?"✓ ":"")+n;b.onclick=()=>{if(selected.has(n)){selected.delete(n)}else{if(selected.size>=6){alert("参加者は6人までです");return}selected.add(n)}if(session){session.names=[...selected];session.allNames=[...new Set([...session.allNames,...selected])];}renderPeople();updateCounts();if(session){updateStats();saveLocal() }else saveLocal()};let edit=document.createElement("button");edit.className="secondary tiny";edit.textContent="編集";edit.onclick=()=>renamePerson(n);let del=document.createElement("button");del.className="danger tiny";del.textContent="削除";del.onclick=()=>deletePerson(n);wrap.append(b,edit,del);$("people").append(wrap)});
 }
 function renamePerson(oldName){let next=prompt("新しいメンバー名を入力してください",oldName);if(next===null)return;next=next.trim();if(!next){alert("名前を入力してください");return}if(next!==oldName&&people.includes(next)){alert("同じ名前が登録されています");return}
  people=people.map(n=>n===oldName?next:n);if(selected.has(oldName)){selected.delete(oldName);selected.add(next)}if(manualSelected.has(oldName)){manualSelected.delete(oldName);manualSelected.add(next)}
@@ -176,23 +176,23 @@ function updateStats(){
 function updateCounts(){$("playerCount").textContent=selected.size;$("historyCount").textContent=history.length}
 function startSession(){
  if(selected.size<4||selected.size>6){alert("参加者を4〜6人選択してください");return}
- session={names:active(),allNames:active(),matches:[]};$("currentArea").classList.remove("hidden");$("start").classList.add("hidden");renderTodayMatches();$("next").textContent="🎲 次の試合を抽選する";nextMatch();
+ session={names:active(),allNames:active(),matches:[]};saveLocal();$("currentArea").classList.remove("hidden");$("start").classList.add("hidden");renderTodayMatches();$("next").textContent="🎲 次の試合を抽選する";nextMatch();
 }
-function nextMatch(){if(!session)return;if(session.names.length<4){alert("次の試合には4人以上の参加者が必要です。参加者を追加してください。");return}let m=candidateNext();m.attendees=session.names.slice();session.allNames=[...new Set([...session.allNames,...session.names])];session.matches.push(m);renderTodayMatches();updateStats();$("undo").disabled=false}
-function undo(){if(!session||!session.matches.length)return;session.matches.pop();renderTodayMatches();updateStats();$("roundCount").textContent=session.matches.length}
-function resetToday(){if(!confirm("今日の参加者選択と試合記録をリセットしますか？\n保存済みの過去履歴は残ります。"))return;session=null;selected.clear();$("currentArea").classList.add("hidden");$("start").classList.remove("hidden");$("start").textContent="🎲 第1試合を抽選する";$("todayMatches").innerHTML="";$("todayStats").textContent="第1試合を抽選すると、出場・休憩回数が表示されます。";$("roundCount").textContent="0";renderPeople();updateCounts()}
+function nextMatch(){if(!session)return;if(session.names.length<4){alert("次の試合には4人以上の参加者が必要です。参加者を追加してください。");return}let m=candidateNext();m.attendees=session.names.slice();session.allNames=[...new Set([...session.allNames,...session.names])];session.matches.push(m);renderTodayMatches();updateStats();$("undo").disabled=false;saveLocal()}
+function undo(){if(!session||!session.matches.length)return;session.matches.pop();renderTodayMatches();updateStats();$("roundCount").textContent=session.matches.length;saveLocal()}
+function resetToday(){if(!confirm("今日の参加者選択と試合記録をリセットしますか？\n保存済みの過去履歴は残ります。"))return;session=null;selected.clear();saveLocal();$("currentArea").classList.add("hidden");$("start").classList.remove("hidden");$("start").textContent="🎲 第1試合を抽選する";$("todayMatches").innerHTML="";$("todayStats").textContent="第1試合を抽選すると、出場・休憩回数が表示されます。";$("roundCount").textContent="0";renderPeople();updateCounts()}
 function finish(){
  if(!session||!session.matches.length){alert("保存する試合がありません");return}
- history.unshift({date:new Date().toISOString(),names:session.allNames,matches:session.matches.map(m=>({teams:m.teams,rest:m.rest,attendees:m.attendees||session.allNames}))});history=history.slice(0,150);saveLocal();session=null;
+ history.unshift({date:new Date().toISOString(),names:session.allNames,matches:session.matches.map(m=>({teams:m.teams,rest:m.rest,attendees:m.attendees||session.allNames}))});history=history.slice(0,150);session=null;saveLocal();
  $("currentArea").classList.add("hidden");$("start").classList.remove("hidden");$("start").textContent="🎲 新しいテニスを始める";selected.clear();renderPeople();renderManualPeople();renderHistory();updateCounts();$("todayStats").textContent="今日の試合を保存しました。次回の抽選に反映されます。";$("roundCount").textContent="0";
 }
-function dateKey(rec){return new Date(rec.date).toLocaleDateString("en-CA")}
+function dateKey(rec){const d=new Date(rec.date);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
 function renderHistory(){
  $("historySummary").textContent=`保存済み：${history.length}回分（新しい順）`;$("historyList").innerHTML="";
  history.slice(0,30).forEach((r,idx)=>{let d=document.createElement("div");d.className="historyrow";let left=document.createElement("span");left.textContent=`${new Date(r.date).toLocaleDateString("ja-JP")} ・ ${(r.names||[]).length}人${r.manual?" ・ 手動":""} ・ ${(r.matches||[]).length}試合`;let del=document.createElement("button");del.className="danger tiny";del.textContent="この記録を削除";del.onclick=()=>{if(confirm("この記録を削除しますか？")){history.splice(idx,1);saveLocal();renderHistory();updateCounts()}};d.append(left,del);$("historyList").append(d)});
  if(!history.length)$("historyList").innerHTML='<p class="sub">まだ履歴はありません。今日の試合終了時に保存できます。</p>';
 }
-function deleteHistoryDate(){let date=$("deleteDate").value;if(!date){alert("削除する日付を選んでください");return}let before=history.length;history=history.filter(r=>dateKey(r)!==date);if(history.length===before){alert("その日の履歴はありません");return}if(confirm(date+" の履歴をすべて削除しますか？")){saveLocal();renderHistory();updateCounts()}else{history=load("tm_history",[])} }
+function deleteHistoryDate(){let date=$("deleteDate").value;if(!date){alert("削除する日付を選んでください");return}const count=history.filter(r=>dateKey(r)===date).length;if(!count){alert("その日の履歴はありません");return}if(!confirm(date+" の履歴 "+count+"件をすべて削除しますか？"))return;history=history.filter(r=>dateKey(r)!==date);saveLocal();renderHistory();updateCounts();alert(date+" の履歴を削除しました。");}
 
 
 let manualSelected=new Set();
@@ -231,4 +231,12 @@ $("start").onclick=startSession;$("resetToday").onclick=resetToday;$("deleteDate
 $("clearHistory").onclick=()=>{if(confirm("過去の履歴をすべて消去しますか？")){history=[];saveLocal();renderHistory();updateCounts()}};
 $("export").onclick=()=>{let blob=new Blob([JSON.stringify({people,history},null,2)],{type:"application/json"});let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tennis-history.json";a.click();URL.revokeObjectURL(a.href)};
 renderPeople();renderManualPeople();renderHistory();updateCounts();
+// Restore an unfinished session after reload or closing Safari.
+if(session && Array.isArray(session.matches) && Array.isArray(session.names)){
+ selected=new Set(session.names);
+ $("currentArea").classList.remove("hidden");$("start").classList.add("hidden");
+ renderPeople();renderTodayMatches();updateStats();$("next").textContent="🎲 次の試合を抽選する";
+ $("undo").disabled=!session.matches.length;
+ $("roundCount").textContent=session.matches.length;
+}
 </script></body></html>
